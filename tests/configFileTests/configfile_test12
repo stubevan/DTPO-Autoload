@@ -1,0 +1,39 @@
+#
+#	Config file for dtpo_autoload
+#	Test File 6 - Attribute with missing value
+#
+
+#
+#	Logfiles
+#	For testing value is removed - there is no spaces at the end
+#
+#LOG_DIRECTORY=/Volumes/App Data/Script Logs
+LOG_DIRECTORY=
+
+
+#
+#	Log level - one of debug or run
+#
+DEBUG=False
+
+#	
+#
+#	Config File - contains the parsing instructions
+#
+PATTERN_FILE=/Users/stu/Development/scripts/dtpo_autoload/dtpo_autoload_patterns.conf
+
+#
+#	Directory contain the documents to be processed
+#	This should also have a Folder Action on it
+#
+SOURCE_DIRECTORY=/Volumes/Encrypted Docs/Time For Action
+
+#
+#	Base for the DTPO Databases
+#
+DEVONTHINK_DATABASES_DIRECTORY=/Volumes/Encrypted Docs/Devon Filing
+
+#
+#	Directory for Documents which cause an Error and can't be loaded
+#	Commented out for the test
+ORPHAN_DOCUMENTS_DIRECTORY=/Volumes/Encrypted Docs/Time For Action/Orphan Documents

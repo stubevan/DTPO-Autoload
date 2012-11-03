@@ -1,0 +1,18 @@
+#
+#	Parsing Instructions for the DevonThink Autoload script
+#	For full details see ....
+#
+#	The goal is to identify a target database and group
+#	The target file name format is YYYY-MM-DD Name 1 {Name 2}
+#	Files will be tagged with a default tag of Action Required
+#	Files which can't be matched will be loaded in the Default Inbox
+
+DefaultTag::Action Required
+DefaultGroup::Inbox
+DefaultDatabase::Home Filing
+
+Database::Home Filing
+	Description::First Direct Sole Account
+	Group::Finance/First Direct/Statements/Sole
+	Pattern1::first direct internet banking - Statement->First Direct Sole Statement
+	Date::Statement Date->(2)[0-9][0-9] [a-zA-Z][a-zA-Z][a-zA-Z] [0-9][0-9]
