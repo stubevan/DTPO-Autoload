@@ -1,0 +1,7 @@
+*.pyc
+.DS_Store
+*Meta
+*dtBase2*
+*.log
+*.swp
+tests/PDFParseTests/forbidden.pdf
