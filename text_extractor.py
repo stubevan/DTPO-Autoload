@@ -78,6 +78,8 @@ class TextExtractor(object) :
         codec = 'utf-8'
         caching = True
         laparams = LAParams()
+        laparams.char_margin = 4.0
+        laparams.word_margin = 1.0
 
         rsrcmgr = PDFResourceManager(caching=caching)
 
@@ -98,8 +100,8 @@ class TextExtractor(object) :
                 caching=caching, check_extractable=True)
 
         except PDFException as pdf_error :
-            message = "Failed to parse PDF -> {0}".\
-                      format(str(pdf_error))
+            message = "Failed to parse file {0} -> {1}".\
+                      format(self.source_file, str(pdf_error))
             raise DTPOFileError(self.source_file, 0, message)
         except Exception as exception :
             message = "Failed to parse PDF file Unknown exception {0} - > {1}" \
@@ -120,6 +122,7 @@ class TextExtractor(object) :
             del self.file_array[-1]
 
         #   Remove the outfile
+        # TODO Have option to keep text file for determining patterns
         os.remove(self.text_file)
 
     def get_file_contents_as_array(self) :

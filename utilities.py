@@ -168,8 +168,6 @@ class Config (object) :                               #pylint: disable-msg=R0903
                 .format(str(io_error))
             raise DTPOFileError (config_file, line_number, error_message)
 
-
-
     def check_parameters_valid(self) :
         """
         Now check that we have everything & that files/directories are
@@ -218,6 +216,11 @@ class Config (object) :                               #pylint: disable-msg=R0903
         """ Return WORKING_DIRECTORY
         """
         return self.parameters['WORKING_DIRECTORY']['value']
+
+    def get_database_directory(self) :
+        """ Return DEVONTHINK_DATABASES_DIRECTORY
+        """
+        return self.parameters['DEVONTHINK_DATABASES_DIRECTORY']['value']
 
 #
 #    Pop up an alert

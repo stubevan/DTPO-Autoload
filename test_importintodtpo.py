@@ -42,7 +42,6 @@ class ImportPatternTest (unittest.TestCase) :        #pylint: disable-msg=R0904
         self.assertEquals(search_pattern(search_details, self.file_array, 2),
                           None)
 
-
     def test_search_simple_valid(self) :
         """
             Basic search with text that will be found
@@ -64,7 +63,7 @@ class ImportPatternTest (unittest.TestCase) :        #pylint: disable-msg=R0904
             Basic search with text that will be found
         """
         search_details = SearchDetails(key_pattern = 'Random Test',
-                                       value_pattern = '->Target Name')
+                                       value_pattern = '!!Target Name')
         self.assertEquals(search_pattern(search_details, self.file_array, 0),
                           'Target Name')
 
@@ -73,7 +72,7 @@ class ImportPatternTest (unittest.TestCase) :        #pylint: disable-msg=R0904
             Basic search with text that will be found
         """
         search_details = SearchDetails(key_pattern = 'Random Test',
-                                       value_pattern = '->')
+                                       value_pattern = '!!')
         self.assertRaises(ParseError, search_pattern,
                           search_details, self.file_array, 0)
 
@@ -199,6 +198,101 @@ class ImportIntoDTPOTest(unittest.TestCase) :
                                         "/" + file_name
 
         self.assertRaises(ParseError, execute_import, import_parameters)
+
+class DocumentNameTest(unittest.TestCase) :
+    """
+        Ensure that dates get correctly converted to the proper format
+    """
+
+    def test_simple_document_name(self) :
+        """
+            Only string 1 defined
+        """
+
+        string1 = 'string1'
+        string2 = None
+        date_string = None
+        import_params = DTPOImportParameters(
+            string1 = string1,
+            string2 = string2,
+            date_string = date_string,
+            testing = True
+        )
+
+        doc_name = import_params.get_document_name()
+        self.assertEquals(doc_name, string1)
+
+    def test_2_pattern_no_date(self) :
+        """
+            2 strings no date
+        """
+
+        string1 = 'string1'
+        string2 = 'string2'
+        date_string = None
+        import_params = DTPOImportParameters(
+            string1 = string1,
+            string2 = string2,
+            date_string = date_string,
+            testing = True
+        )
+
+        doc_name = import_params.get_document_name()
+        self.assertEquals(doc_name, string1+ '-' + string2)
+
+    def test_1_pattern_good_date(self) :
+        """
+            1 string and a good date
+        """
+
+        string1 = 'string1'
+        string2 = None
+        date_string = '24 May 2012'
+        import_params = DTPOImportParameters(
+            string1 = string1,
+            string2 = string2,
+            date_string = date_string,
+            testing = True
+        )
+
+        doc_name = import_params.get_document_name()
+        self.assertEquals(doc_name, '2012-05-24 ' + string1)
+
+    def test_2_pattern_good_date(self) :
+        """
+            2 strings and a good date
+        """
+
+        string1 = 'string1'
+        string2 = 'string2'
+        date_string = '24 May 2012'
+        import_params = DTPOImportParameters(
+            string1 = string1,
+            string2 = string2,
+            date_string = date_string,
+            testing = True
+        )
+
+        doc_name = import_params.get_document_name()
+        self.assertEquals(doc_name, '2012-05-24 ' + string1 + '-' + string2)
+
+    def test_1_pattern_bad_date(self) :
+        """
+            1 string and a bad date
+        """
+
+        string1 = 'string1'
+        string2 = None
+        date_string = '24 M a y 2012'
+        import_params = DTPOImportParameters(
+            string1 = string1,
+            string2 = string2,
+            date_string = date_string,
+            testing = True
+        )
+
+        self.assertRaises(ParseError, import_params.get_document_name)
+
 
 if __name__ == '__main__':
 

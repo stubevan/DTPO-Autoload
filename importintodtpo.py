@@ -5,12 +5,13 @@
 """
 
 import re
+from dateutil import parser
 
 from appscript import app, k
 
 from dtpoexceptions import ParseError
 from dtpoparsespec import DTPOParseSpec
-from utilities import dtpo_log
+from utilities import dtpo_log, Config
 from text_extractor import TextExtractor
 
 class DTPOImportParameters (object) :
@@ -18,15 +19,26 @@ class DTPOImportParameters (object) :
          Parameters required for an import
     """
 
-    def __init__(self, pattern_spec = None, testing = False) :
+    def __init__(self, pattern_spec = None, pattern_number = None,
+                string1 = None, string2 = None, date_string = None,
+                testing = False, source_file = None) :
 
         if not testing :
             assert pattern_spec
             self.pattern_spec = pattern_spec
 
-            self.database = pattern_spec.default_database
-            self.group = pattern_spec.default_group
-            self.tags = pattern_spec.tag
+            if string1 is not None :
+                assert pattern_number is not None
+                self.database = \
+                    pattern_spec.file_pattern_list[pattern_number].database
+                self.group = \
+                    pattern_spec.file_pattern_list[pattern_number].group
+                self.tags = \
+                    pattern_spec.file_pattern_list[pattern_number].tag
+            else:
+                self.database = pattern_spec.default_database
+                self.group = pattern_spec.default_group
+                self.tags = pattern_spec.default_tag
         else :
             self.pattern_spec = None
 
@@ -35,10 +47,10 @@ class DTPOImportParameters (object) :
             self.tags = None
 
         # Initialise variables that will get defined as the parse progresses
-        self.string1 = None
-        self.string2 = None
-        self.date_string = None
-        self.source_file = None
+        self.string1 = string1
+        self.string2 = string2
+        self.date_string = date_string
+        self.source_file = source_file
 
         self.file_type = None
         self.mime_type = None
@@ -47,13 +59,28 @@ class DTPOImportParameters (object) :
         """
             creates the final name of the file by constructing from
             the component parts
+            If nothing was found then assign a default
         """
-        assert self.string1
+        if self.string1 is None :
+            self.string1 = 'No Match Found'
 
         document_name = ''
 
         if self.date_string is not None :
-            document_name = self.date_string + " " + self.string1
+            #   We have a date - try and convert it into something meaningful
+            try :
+                dt = parser.parse(self.date_string)
+            except ValueError as date_error :
+                message = "Failed to convert '{0}' to date -> {1}".format(
+                    self.date_string, str(date_error))
+                raise ParseError(message)
+            except Exception as unknown_exception :
+                message = "unknown exception while parsing date {0} -> {1}" \
+                        .format(self.date_string, str(unknown_exception))
+
+            date_string = dt.strftime('%Y-%m-%d')
+
+            document_name = date_string + " " + self.string1
         else :
             document_name = self.string1
 
@@ -67,12 +94,12 @@ class DTPOImportParameters (object) :
             Display the details of the file to be imported.
         """
 
-        print "Source file -> {0}\n".format(source_file)
+        print "\nSource file -> {0}\n".format(source_file)
         print "Target details:"
         print "Database    -> {0}".format(self.database)
         print "Group       -> {0}".format(self.group)
         print "Tags        -> {0}".format(self.tags)
-        print "Document    -> {0}".format(self.get_document_name())
+        print "Document    -> {0}\n".format(self.get_document_name())
 
 def parse_source_file(text_extractor, pattern_spec) :
     """
@@ -88,7 +115,9 @@ def parse_source_file(text_extractor, pattern_spec) :
     """
     assert pattern_spec
 
-    found_string1 = False
+    found_string1 = None
+    found_string2 = None
+    found_date = None
     line_number = 0
     pattern_number = None
 
@@ -114,16 +143,16 @@ def parse_source_file(text_extractor, pattern_spec) :
                 pattern_spec.string2_search_dict[pattern_number]
         if pattern_number in pattern_spec.date_search_dict :
             date_search_details = \
-                pattern_spec.string2_search_dict[pattern_number]
+                pattern_spec.date_search_dict[pattern_number]
 
         line_number = 0
-        found_string2 = False
-        found_date = False
+        found_string2 = None
+        found_date = None
 
         #   Assuming there is something to look for do the search
         while line_number < len(file_array)-1 and (
-            (string2_search_details is not None and not found_string2 ) or
-            (date_search_details is not None and not found_date)) :
+            (string2_search_details is not None and found_string2 is None ) or
+            (date_search_details is not None and found_date is None)) :
 
             if string2_search_details is not None :
                 found_string2 = search_pattern(
@@ -133,17 +162,12 @@ def parse_source_file(text_extractor, pattern_spec) :
                     date_search_details, file_array, line_number)
             line_number += 1
 
-        #   We're out - check that we're consistent
-        if (string2_search_details is not None and not found_string1) or (
-            date_search_details is not None and not found_date) :
-            #
-            #   It's not an error - we just didn't find what we were looking for
-            found_string1 = None
-            found_string2 = None
-            found_date = None
-
-    return DTPOImportParameters(pattern_spec, found_string1,
-                                found_string2, found_date)
+    return DTPOImportParameters(pattern_spec = pattern_spec,
+                                pattern_number = pattern_number,
+                                source_file = text_extractor.source_file,
+                                string1 = found_string1,
+                                string2 = found_string2,
+                                date_string = found_date)
 
 def search_pattern_list(search_list, file_array, line_number) :
     """
@@ -153,11 +177,12 @@ def search_pattern_list(search_list, file_array, line_number) :
     pattern_number = 0
     found_string = None
 
-    while found_string is not None and pattern_number < len(search_list) :
-        found_string = search_pattern(search_list[0], file_array, line_number)
+    while found_string is None and pattern_number < len(search_list) :
+        found_string = search_pattern(
+            search_list[pattern_number], file_array, line_number)
         pattern_number += 1
 
-    return (found_string, pattern_number)
+    return (found_string, pattern_number-1)
 
 def search_pattern(search_details, file_array, line_number) :
     """
@@ -180,7 +205,7 @@ def search_pattern(search_details, file_array, line_number) :
         #
         #   Got something - First Check if a hard target has been specified
         if (search_details.value_pattern is not None and
-            search_details.value_pattern.find('->') == 0) :
+            search_details.value_pattern.find('!!') == 0) :
             found_string = search_details.value_pattern[2:]
             if found_string == '' :
                 error_message = "Line {0}.  Empty hard target specified for " \
@@ -189,17 +214,19 @@ def search_pattern(search_details, file_array, line_number) :
                 raise ParseError(error_message)
 
         #   is there a another value to look for
-        elif search_details.offset_line is not None and \
-            search_details.offset_line != 0 :
+        elif search_details.value_pattern is not None :
+
+            if search_details.offset_line is None:
+                offset = 0
+            else :
+                offset = search_details.offset_line
 
             search_results = None
 
-            if line_number + search_details.offset_line in \
-             range(0, len(file_array)) :
-
+            if line_number + offset in range(0, len(file_array)-1) :
                 if search_details.value_pattern is not None :
                     search_results = re.search(search_details.value_pattern,
-                        file_array[line_number + search_details.offset_line])
+                        file_array[line_number + offset])
 
     if found_string is None and search_results:
         #   Get the last group if its there
@@ -223,20 +250,19 @@ def execute_import(import_parameters) :
     assert import_parameters.tags
 
     source_file = import_parameters.source_file
+    database = Config.config.get_database_directory() + '/' + \
+        import_parameters.database
+    document_name = import_parameters.get_document_name()
+
     dtpo_log('info', "execute_import source file -> %s", source_file)
-    dtpo_log('info', "execute_import database -> %s",
-                       import_parameters.database)
-    dtpo_log('info', "execute_import group -> %s",
-                       import_parameters.group)
-    dtpo_log('info', "execute_import tags -> %s",
-                       import_parameters.tags)
-    dtpo_log('info', "execute_import document name -> %s",
-                       import_parameters.get_document_name())
+    dtpo_log('info', "execute_import database -> %s", database)
+    dtpo_log('info', "execute_import group -> %s", import_parameters.group)
+    dtpo_log('info', "execute_import tags -> %s", import_parameters.tags)
+    dtpo_log('info', "execute_import document name -> %s", document_name)
 
     try :
         try :
-            dtpo_db = app(u'DEVONthink Pro').open_database(
-                import_parameters.database)
+            dtpo_db = app(u'DEVONthink Pro').open_database(database)
             dtpo_db_id = dtpo_db.id()
         except AttributeError as attribute_error :
             message = "Failed to open database {0} -> {1}".format(
@@ -245,7 +271,10 @@ def execute_import(import_parameters) :
 
         try :
             dtpo_group = app(u'DEVONthink Pro').create_location(
-                import_parameters.group, in_=app.databases.ID(dtpo_db_id))
+                import_parameters.group,
+                in_=app.databases.ID(dtpo_db_id))
+            # get the group to check that it's there
+            dtpo_group_id = dtpo_group.id()           #pylint: disable-msg=W0612
         except AttributeError as attribute_error :
             message = "Failed access group {0} -> {1}".format(
                 import_parameters.group, str(attribute_error))
@@ -253,14 +282,14 @@ def execute_import(import_parameters) :
 
         try :
             doc = app(u'DEVONthink Pro').import_(
-                source_file,
-                name = import_parameters.get_document_name(),
+                import_parameters.source_file,
+                name = document_name,
                 to = dtpo_group)
 
             docid = doc.id()
         except AttributeError as attribute_error :
             message = "Failed import document {0} -> {1}".format(
-                import_parameters.get_document_name(), str(attribute_error))
+                document_name, str(attribute_error))
             raise ParseError(message)
 
         try :

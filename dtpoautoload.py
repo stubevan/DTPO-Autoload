@@ -8,7 +8,7 @@ import optparse
 
 from utilities import Config, pop_up_alert, orphan_file, dtpo_log
 from dtpoexceptions import ParseError
-from dtpoparsespec import DTPOParseSpec
+from dtpoparsespec import DTPOParseSpec, DTPOFileError
 from importintodtpo import execute_import, get_import_parameters
 
 def main() :
@@ -26,13 +26,15 @@ def main() :
 
     try :
         # Config File is mandatory
-        if not opts.configFile :
+        if not opts.config_file :
             raise ParseError("No Config file")
         #
         #    Upload the configs
         #
-        Config(opts.configFile)
+        Config(opts.config_file)
         pattern_spec = DTPOParseSpec(Config.config.get_pattern_file())
+    except DTPOFileError as file_error:
+        print file_error.message
     except ParseError as parse_error :
         pop_up_alert("DTPO Initialsation failed.  Files not orphaned.  ->"\
             " " + parse_error.message)
@@ -53,11 +55,19 @@ def main() :
                 import_details.print_import_details(source_file)
             else :
                 execute_import(import_details)
+        except DTPOFileError as file_error :
+            print file_error.message
         except ParseError as parse_error :
             #
             #    We failed ... Move the file to the Orphan directory
             #
+            print parse_error.message
             dtpo_log('error', "Import Failed - orphaning file")
             orphan_file(source_file)
             pop_up_alert("Failed to import file " + source_file + \
                 ".  File Orphaned")
+
+if __name__ == '__main__':
+    main()
+
+#TODO check that input file is passed alone

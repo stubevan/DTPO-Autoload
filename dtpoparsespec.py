@@ -51,10 +51,10 @@ class SearchDetails(object) :                         #pylint: disable-msg=R0903
             #   search2 is looking for "->"
             #   if neither are found then the value is the search string
             #   if search1 is set then we ignore search2
-            search1 = re.match(
+            search1 = re.search(
                 '^([^#]*)->\((.*)\)([^#]*)',           #pylint:disable-msg=W1401
                 value.lstrip())
-            search2 = re.match('^([^#]*)->([^#]*)', value.lstrip())
+            search2 = re.search('^([^#]*)->([^#]*)', value.lstrip())
 
             if (not search1 and not search2) :
                 #   No offset specified so just take whole pattern
