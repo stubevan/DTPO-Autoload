@@ -1,236 +1,305 @@
-#!/usr/bin/env python
+#!/usr/bin/python                                     #pylint: disable-msg=C0103
+"""
+    Will probably split this in 2 - has methods to produce file name,
+    parse PFD and then load in DTPO
+"""
 
-import logging
-from dtpoimportparameters import *
-from utilities import *
-import sys
-from pdfminer.pdfparser import PDFDocument, PDFParser
-from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter, process_pdf
-from pdfminer.pdfdevice import PDFDevice, TagExtractor
-from pdfminer.converter import XMLConverter, HTMLConverter, TextConverter
-from pdfminer.cmapdb import CMapDB
-from pdfminer.layout import LAParams
-from appscript import *
-from datetime import *
+import re
 
+from appscript import app, k
 
-#
-#   Parse the PDF and return as an array
-#
-def parsePDF(sourceFile) :
-    
-    Config.logger.info("parsePDF sourceFile -> '%s'", sourceFile)
-    # input option
-    password = ''
-    pagenos = set()
-    maxpages = 0
-    # output option
-    outfile = None
-    outtype = None
-    outdir = None
-    layoutmode = 'normal'
-    codec = 'utf-8'
-    pageno = 1
-    scale = 1
-    caching = True
-    showpageno = True
-    laparams = LAParams()
-    #
-    PDFDocument.debug = debug
-    PDFParser.debug = debug
-    CMapDB.debug = debug
-    PDFResourceManager.debug = debug
-    PDFPageInterpreter.debug = debug
-    PDFDevice.debug = debug
-    #
-    rsrcmgr = PDFResourceManager(caching=caching)
-    infile = config.getSourceDirectory() + "/" + sourceFile
-    outfile = config.getWorkingDirectory() + "/" + sourceFile + ".txt"
+from dtpoexceptions import ParseError
+from dtpoparsespec import DTPOParseSpec
+from utilities import dtpo_log
+from text_extractor import TextExtractor
 
-    outtype = 'text'
-    outfp = file(outfile, 'w')
-    fp = file(fname, 'rb')
-    device = TextConverter(rsrcmgr, outfp, codec=codec, laparams=laparams)
-    process_pdf(rsrcmgr, device, fp, pagenos, maxpages=maxpages, password=password,
-                    caching=caching, check_extractable=True)
-    fp.close()
-    device.close()
-    outfp.close()
-    
-    #   Got the PDF converted = now get it into an array
-    fileArray = []
-    for line in open(outfile) :
-        fileArray.append(line)
-        
-    return fileArray
-    
-
-#
-#   Parameters required for an import
 class DTPOImportParameters (object) :
-    
-    def __init__(self, string1SearchResults, string2SearchResults, dtpoImportParameters) :
-    
-        self.database = dtpoImportParameters.getDefaultDatabase()
-        self.group = dtpoImportParameters.getDefaultGroup()
-        self.documentName = dtpoImportParameters.getDocumentName()
-        self.tags = dtpoImportParameters.getDefaultTags()
+    """
+         Parameters required for an import
+    """
 
-        if (searchString1Results) :
-            self.database = searchString1Results.getDatabase()
-            self.group = searchString1Results.getGroup()
-            self.tags = searchString1Results.getTags()
+    def __init__(self, pattern_spec = None, testing = False) :
 
+        if not testing :
+            assert pattern_spec
+            self.pattern_spec = pattern_spec
 
-            # Now construct the document Name = which could end up being a default
-            self.documentName = searchString1Results.getTarget()
-            if (dateSearchResults) :
-                self.documentName = dateSearchResults.getTarget() + " " + self.documentName
-            if (string2SearchResults) :
-                self.documentName = self.documentName + string2SearchResults.getTarget()
-                
-#
-#   Got a line - lets see of we can find a match   
-def searchForMatch (line, lineNumber, searchStringParameters) :
-   
-    searchStringResults = SearchStringResults()
-    
+            self.database = pattern_spec.default_database
+            self.group = pattern_spec.default_group
+            self.tags = pattern_spec.tag
+        else :
+            self.pattern_spec = None
+
+            self.database = None
+            self.group = None
+            self.tags = None
+
+        # Initialise variables that will get defined as the parse progresses
+        self.string1 = None
+        self.string2 = None
+        self.date_string = None
+        self.source_file = None
+
+        self.file_type = None
+        self.mime_type = None
+
+    def get_document_name(self) :
+        """
+            creates the final name of the file by constructing from
+            the component parts
+        """
+        assert self.string1
+
+        document_name = ''
+
+        if self.date_string is not None :
+            document_name = self.date_string + " " + self.string1
+        else :
+            document_name = self.string1
+
+        if self.string2 is not None :
+            document_name = document_name + "-" + self.string2
+
+        return document_name
+
+    def print_import_details(self, source_file) :
+        """
+            Display the details of the file to be imported.
+        """
+
+        print "Source file -> {0}\n".format(source_file)
+        print "Target details:"
+        print "Database    -> {0}".format(self.database)
+        print "Group       -> {0}".format(self.group)
+        print "Tags        -> {0}".format(self.tags)
+        print "Document    -> {0}".format(self.get_document_name())
+
+def parse_source_file(text_extractor, pattern_spec) :
+    """
+        Now iterate through the file and see if we can find anything
+
+        We're trying to avoide multiple parses of the file (we're looking for
+        up to 3 patterns:  pattern 1, pattern 2 & date).  The algorithm is
+        currently not efficient as we have to parse the file twice but
+        given that most patterns will be found in the first few lines it's not
+        that bad.  In addition it makes things considerably less complicated.
+        Pattern 2 and date can "look back" and occur before pattern 1 so
+        tracking that would make things harder to understand!!
+    """
+    assert pattern_spec
+
+    found_string1 = False
+    line_number = 0
+    pattern_number = None
+
     #
-    #   Iterate through the pattern List
-    for huntPattern in searchStringParameters.getPatternList() :
-       
-        Config.logger.debug("--> hunting for -> '%s'", huntPattern)
-        hunt = match(huntPattern, line)
-        if (hunt) :
+    #   Iterate through the file for the first time looking for the primary
+    #   pattern
+    file_array = text_extractor.get_file_contents_as_array()
+    for line_number in range(0, len(file_array)-1) :
+        found_string1, pattern_number = search_pattern_list(
+            pattern_spec.string1_search_dict,
+            file_array,
+            line_number)
+        if found_string1 :
+            break
+
+    if found_string1 :
+        #   We got something - see if there is a pattern2 and date to look for
+        string2_search_details = None
+        date_search_details = None
+
+        if pattern_number in pattern_spec.string2_search_dict :
+            string2_search_details = \
+                pattern_spec.string2_search_dict[pattern_number]
+        if pattern_number in pattern_spec.date_search_dict :
+            date_search_details = \
+                pattern_spec.string2_search_dict[pattern_number]
+
+        line_number = 0
+        found_string2 = False
+        found_date = False
+
+        #   Assuming there is something to look for do the search
+        while line_number < len(file_array)-1 and (
+            (string2_search_details is not None and not found_string2 ) or
+            (date_search_details is not None and not found_date)) :
+
+            if string2_search_details is not None :
+                found_string2 = search_pattern(
+                    string2_search_details, file_array, line_number)
+            if date_search_details is not None :
+                found_date = search_pattern(
+                    date_search_details, file_array, line_number)
+            line_number += 1
+
+        #   We're out - check that we're consistent
+        if (string2_search_details is not None and not found_string1) or (
+            date_search_details is not None and not found_date) :
             #
-            #   We've got a match
-            #
-            Config.logger.info("line %04d, found match for -> '%s' in -> '%s'", line, huntPattern, line)    #
-            #   Now determine what to do - if no subsidary hunt of match is set then we have what what we want
-            #
-            targetDetails = searchStringParameters.getTargetDetails(huntPattern)
-            targetPattern = targetDetails.getTargetPattern()
-            if not (targetPattern) :
-                #
-                #   No further target string has been set so the required results will be in the match
-                #
-                searchStringResults.targetString = hunt.group(1)
-                searchStringResults.offsetLine = targetDetails.getOffsetLine()
-    
-    return searchStringResults
- 
-                        
-                        
-#   Function which iterates through an array and extracts the relevant details for the Import
-def parseFile(fileLines, dtpoParseSpec, config) :
-    #
-    #   Now iterate through the file and see if we can find anything
-    #
-    lineNumber = 1
-    lineBuffer = []
-    
-    for line in fileLines :
-        
-        Config.logger.debug("line %04d -> %s", lineNumber, line)
-        
-        lineBuffer[line] = line
-        
+            #   It's not an error - we just didn't find what we were looking for
+            found_string1 = None
+            found_string2 = None
+            found_date = None
+
+    return DTPOImportParameters(pattern_spec, found_string1,
+                                found_string2, found_date)
+
+def search_pattern_list(search_list, file_array, line_number) :
+    """
+        Iterate through search list and see if we can find a string
+        This method is only used to search for the primary pattern
+    """
+    pattern_number = 0
+    found_string = None
+
+    while found_string is not None and pattern_number < len(search_list) :
+        found_string = search_pattern(search_list[0], file_array, line_number)
+        pattern_number += 1
+
+    return (found_string, pattern_number)
+
+def search_pattern(search_details, file_array, line_number) :
+    """
+        Check whether a pattern can be extracted based on the passed list
+        of SearchDetails.  We stop at the first one.  A reminder of the
+        methodology.  This holds the details of an object being searched for
+        key_pattern - the reg exp of the trigger pattern - e.g. "Statement Date"
+            Note that if the reg exp returns a group then this will be used
+        value_pattern - the reg exp we're looking for
+        offset_line   - the offset (+ve or -ve) from the line of the key
+    """
+    assert search_details
+    assert file_array
+
+    found_string = None
+
+    search_results = re.search(
+        search_details.key_pattern, file_array[line_number])
+    if search_results :
         #
-        #   We are still on the initial hunt
-        #
-        if not (searchString1Results) :
-            for filePattern in dtpoParseSpec.getFilePatterns():
-                searchString1Results = searchForMatch(line, lineNumber, filePattern.getstring1Pattern())
-                if (searchString1Results) :
-                    break
-            
-        if (searchString1Results) :
-            #
-            #   We have the main string - now look for the date if we don't have it
-            if not (searchDateResults) :
-                searchDateResults = searchForMatch(line,
-                                                   lineNumber,
-                                                   searchString1Results.getDateSearchParameters())
-                
-            #   See if we need to be looking for String 2
-            if (not string2SearchParameters and searchString1Results.getSearchString2Parameters()) :
-                searchString2Results = searchForMatch(line, lineNumber, string2SearchParameters)
-                    
-        #
-        #   We've done with the main matching - we now need to see if there are forward looking searches outstanding
-        #   search Line will update the results object
-        #
-        if (searchString1Results and searchString1Results.seekForward() == lineNumber) :
-            earchLine(line, searchString1Results)
-                
-        if (searchString2Results and searchString2Results.seekForward() == lineNumber) :
-            searchLine(line, searchString2Results)
-                
-        if (searchString2Results and searchString2Results.seekForward() == lineNumber) :
-            searchLine(line, searchDateResults)
-            
-        lineNumber = lineNumber + 1
-        
-    #   We're done processing the file
-    #   Construct the  return class
-    dtpoImportParameters = DTPOImportParameters(string1SearchResults, string2SearchResults, dateSearchResults, config)
-    return dtpoImportParameters
+        #   Got something - First Check if a hard target has been specified
+        if (search_details.value_pattern is not None and
+            search_details.value_pattern.find('->') == 0) :
+            found_string = search_details.value_pattern[2:]
+            if found_string == '' :
+                error_message = "Line {0}.  Empty hard target specified for " \
+                    "pattern '{1}'".format(line_number,
+                                           search_details.key_pattern)
+                raise ParseError(error_message)
 
-#
-#   Determine the file type
-#   Function not completed always sets to PDF |TODO
-def getFileType(sourceFile, fileType, mimeType) :
-    fileType = k.PDF_document,
-    mimeType = 'application/pdf'
-#
-#   Now run the actual import into DTPO
-def executeImport(sourceFile, dtpoImportParameters, config) :
-    
-    Config.logger.info("executeImport sourceFile -> %s", sourceFile)
-    Config.logger.info("executeImport database -> %s", dtpoImportParameters.database)
-    Config.logger.info("executeImport group -> %s", dtpoImportParameters.group)
-    Config.logger.info("executeImport tags -> %s", dtpoImportParameters.tags)
-    Config.logger.info("executeImport documentName -> %s", dtpoImportParameters.documentName)    
-    
-    dtpodb = app(u'DEVONthink Pro').open_database(dtpoImportParameters.database)
-    dtpodbid = dtpodbid
+        #   is there a another value to look for
+        elif search_details.offset_line is not None and \
+            search_details.offset_line != 0 :
 
-    dtpogroup = app(u'DEVONthink Pro').create_location(dtpoImportParameters.group, in_=app.databases.ID(dtpodbif))
-    dtpogroupid = dtpogroup.id()
+            search_results = None
 
-    fileType = ""
-    mimeTypeType = k.Unknown
-    
-    getFileType(sourceFile, fileType, mimeType)
-    
-    doc = app(u'DEVONthink Pro').create_record_with({
-        k.name: dtpoImportParameters.documentName,
-        k.tags: dtpoImportParameters.tags,
-        k.path: sourceFile,
-        k.MIME_type: mimeType,
-        k.type: ftpoFileType}, in_=app.databases.ID(dtpoid).parents.ID(dtpogroupod))
-    
-    docid = dic.id()
+            if line_number + search_details.offset_line in \
+             range(0, len(file_array)) :
 
-    app(u'DEVONthink Pro').databases.ID(dtpoid).contents.ID(docid).unread.set(True)
+                if search_details.value_pattern is not None :
+                    search_results = re.search(search_details.value_pattern,
+                        file_array[line_number + search_details.offset_line])
+
+    if found_string is None and search_results:
+        #   Get the last group if its there
+        group_id = 0
+        if search_results.lastindex is not None :
+            group_id = search_results.lastindex
+        found_string = search_results.group(group_id)
+
+    return found_string
 
 
-def importFileIntoDTPO(sourceFile, dtpoParseSpec, config) :
-    
-    success = False
-    
-    Config.logger.info("importFilesIntoDTPO sourceFile -> %s", sourceFile)
-    
+def execute_import(import_parameters) :
+    """
+        Now run the actual import into DTPO
+    """
+
+    assert import_parameters.source_file
+    assert import_parameters.file_type
+    assert import_parameters.mime_type
+    assert import_parameters.group
+    assert import_parameters.tags
+
+    source_file = import_parameters.source_file
+    dtpo_log('info', "execute_import source file -> %s", source_file)
+    dtpo_log('info', "execute_import database -> %s",
+                       import_parameters.database)
+    dtpo_log('info', "execute_import group -> %s",
+                       import_parameters.group)
+    dtpo_log('info', "execute_import tags -> %s",
+                       import_parameters.tags)
+    dtpo_log('info', "execute_import document name -> %s",
+                       import_parameters.get_document_name())
+
+    try :
+        try :
+            dtpo_db = app(u'DEVONthink Pro').open_database(
+                import_parameters.database)
+            dtpo_db_id = dtpo_db.id()
+        except AttributeError as attribute_error :
+            message = "Failed to open database {0} -> {1}".format(
+                import_parameters.database, str(attribute_error))
+            raise ParseError(message)
+
+        try :
+            dtpo_group = app(u'DEVONthink Pro').create_location(
+                import_parameters.group, in_=app.databases.ID(dtpo_db_id))
+        except AttributeError as attribute_error :
+            message = "Failed access group {0} -> {1}".format(
+                import_parameters.group, str(attribute_error))
+            raise ParseError(message)
+
+        try :
+            doc = app(u'DEVONthink Pro').import_(
+                source_file,
+                name = import_parameters.get_document_name(),
+                to = dtpo_group)
+
+            docid = doc.id()
+        except AttributeError as attribute_error :
+            message = "Failed import document {0} -> {1}".format(
+                import_parameters.get_document_name(), str(attribute_error))
+            raise ParseError(message)
+
+        try :
+            app(u'DEVONthink Pro').databases.ID(
+                dtpo_db_id).contents.ID(docid).unread.set(True)
+            #duplicate = app(u'DEVONthink Pro').databases.ID(
+            #    dtpo_db_id).contents.ID(docid).number_of_duplicates.get()
+            # TODO Generate Growl notification on duplicate
+        except AttributeError as attribute_error :
+            message = "Failed set attributes {0} -> {1}".format(
+                import_parameters.get_document_name(), str(attribute_error))
+            raise ParseError(message)
+
+    except ParseError as parse_error:
+        raise parse_error
+    except Exception as exception :
+        ex_type = type(exception)
+        message = "Unexpected exception {0} -> {1}".format(
+            ex_type, str(exception))
+        raise Exception(message)
+
+    # TODO Need to move successfully loaded file to Trash
+    return True
+
+def get_import_parameters(source_file, pattern_spec) :
+    """
+        Imports the specified file into DTPO using the spec given
+    """
+
+    dtpo_log('info', "get_import_parameters source_file -> %s", source_file)
+
     #
-    #   parse the PDF and turn it into a list
+    #   parse the file and turn it into a list
     #
-    fileLines = parsePDF(sourceFile)
-    
+    file_parser = TextExtractor(source_file)
+
     #   Parse the file and then do the import
-    dtpoImportParameters = parseFile(fileLines, dtpoParseSpec, config)
-    
-    success = executeImport(sourceFile, dtpoImportParameters, config)
-    
-    return success
-    
+    dtpo_import_parameters = parse_source_file(file_parser, pattern_spec)
+    dtpo_import_parameters.file_type = file_parser.file_type
+    dtpo_import_parameters.mime_type = file_parser.mime_type
 
+    return dtpo_import_parameters

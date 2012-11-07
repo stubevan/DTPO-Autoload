@@ -27,6 +27,12 @@ PATTERN_FILE=/Users/stu/Development/scripts/dtpo_autoload/dtpo_autoload_patterns
 SOURCE_DIRECTORY=/Volumes/Encrypted Docs/Time For Action
 
 #
+#	Directory contain the documents to be processed
+#	This should also have a Folder Action on it
+#
+WORKING_DIRECTORY=/Volumes/App Data/Working Area
+
+#
 #	Base for the DTPO Databases
 #
 DEVONTHINK_DATABASES_DIRECTORY=/Volumes/Encrypted Docs/Devon Filing

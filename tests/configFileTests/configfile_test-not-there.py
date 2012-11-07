@@ -4,5 +4,5 @@
 #	default check Function for Config File testing - This should never be called
 #
 
-def checkMethod() :
+def check_method() :
 	return False

@@ -8,10 +8,10 @@ This creates a list of FileDetails which are used to drive the search
 
 import re
 
-from utilities import dtpo_log
-from dtpoexceptions import DTPOFileError, ParseError
+from utilities import Config
+from dtpoexceptions import ConfigError, ParseError
 
-class SearchDetails(object) :                         #pylint: disable-msg=R0903
+class SearchDetails(object) :   #pylint: disable-msg=R0903
     """
     Holds the details of an object being searched for
     key_pattern   - the reg exp of the trigger pattern - e.g. "Statement Date"
@@ -65,11 +65,7 @@ class SearchDetails(object) :                         #pylint: disable-msg=R0903
                 self.value_pattern = search2.group(2)
             else :
                 self.key_pattern = search1.group(1)
-                try :
-                    self.offset_line = int(search1.group(2))
-                except ValueError as convert_error :
-                    raise ParseError("Bad offset spec '{0}' caused error '{1}" \
-                        .format(search1.group(2), str(convert_error)))
+                self.offset_line = int(search1.group(2))
                 self.value_pattern = search1.group(3)
 
             #   validate that the search patterns are valid
@@ -121,19 +117,15 @@ class FilePattern (object) :                          #pylint: disable-msg=R0903
         self.string2_pattern = None
         self.date_pattern = None
 
-        # List for tracking what's been set
-        self.var_list = []
-        self.master = False
-
 def parse_line(line, line_number) :
     """
     Parse a line to extract a key and value and return a key, value tuple
     """
 
-    dtpo_log('debug', "%04d -> '%s'", line_number, line)
+    Config.logger.debug("%04d -> '%s'", line_number, line)
 
     #   Want lines that dont start with #
-    search = re.match('(^[^#]*)::(.[^#]*)', line.lstrip())
+    search = re.match('(^[^#].*)::(.[^#]*)', line.lstrip())
 
     return_value = (False, "")
 
@@ -142,7 +134,7 @@ def parse_line(line, line_number) :
         key = search.group(1).lstrip()
         value = search.group(2).rstrip()
 
-        dtpo_log('debug', "key -> '%s', value -> '%s'", key, value)
+        Config.logger.debug("key -> '%s', value -> '%s'", key, value)
 
         return_value = (key, value)
 
@@ -167,7 +159,7 @@ Pattern2:: .... as Pattern 1
 Date:: as Pattern 1
     """
     #   Define the grammar we want
-    #                        type, default value, optional, variable
+    #                        type, default value, optional, trigger, precedence
     pattern_keys = {
         'DefaultTag' : {'type' : 'default',
                         'default' : '',
@@ -188,75 +180,51 @@ Date:: as Pattern 1
                         'default' : 'DefaultDatabase',
                         'optional' : True,
                         'variable' : 'database',
-                        'precedence' : 'Slave'},
+                        'precedence' : 1},
         'Tag' : {'type' : 'value',
                 'default' : 'DefaultTag',
                 'optional' : True,
                 'variable' : 'tag',
-                'precedence' : None},
+                'precedence' : 4},
         'Group' : {'type' : 'value',
                    'default' : 'DefaultGroup',
                    'optional' : True,
                    'variable' : 'group',
-                    'precedence' : 'Slave'},
+                   'precedence' : 2},
         'Description' : {'type' : 'value',
                         'default' : '',
                         'optional' : True,
                         'variable' : 'description',
-                        'precedence' : None},
+                        'precedence' : 4},
         'Pattern1' : {'type' : 'pattern',
                         'default' : None,
                         'optional' : False,
                         'variable' : 'string1_pattern',
-                        'precedence' : 'Master'},
+                        'precedence' : 3},
         'Pattern2' : {'type' : 'pattern',
                         'default' : None,
                         'optional' : True,
                         'variable' : 'string2_pattern',
-                        'precedence' : None},
+                        'precedence' : 4},
         'Date' : {'type' : 'pattern',
                     'default' : None,
                     'optional' : True,
                     'variable' : 'date_pattern',
-                    'precedence' : None}
+                    'precedence' : 4}
     }
 
     def __init__(self, config_file) :
         """
             read through the file and set the parameters
         """
-        dtpo_log('info', 'DTPOParseSpec. Source File -> %s', config_file)
+        Config.logger.info("DTPOParseSpec. Source File -> %s", config_file)
 
         self.default_database = None
         self.default_group = None
         self.default_tag = None
         self.file_pattern_list = []
-        self.string1_search_dict = {}
-        self.string2_search_dict = {}
-        self.date_search_dict = {}
 
         self.parse_pattern_file(config_file)
-
-        self.create_reference_lists()
-
-    def create_reference_lists(self) :
-        """
-            Called once everything is finished.  To make parsing easier we
-            create sub lists which refer into the relevant SearchPatterns
-        """
-
-        counter = 0
-        for file_pattern in self.file_pattern_list :
-            search1 = file_pattern.string1_pattern
-            search2 = file_pattern.string2_pattern
-            date_search = file_pattern.date_pattern
-
-            self.string1_search_dict[counter] = search1
-            if search2 is not None :
-                self.string2_search_dict[counter] = search2
-            if date_search is not None :
-                self.date_search_dict[counter] = date_search
-            counter += 1
 
     def set_default(self, key, value) :
         """
@@ -345,20 +313,33 @@ Date:: as Pattern 1
             exec("self.{0} = '{1}'".format(           #pylint: disable-msg=W0122
                 key_variable, value))
         else :
-            # Value or Pattern - if already set then triggers off a new entry
-            # Our consistency checking will reject if it's been set
-            # inappropriately
+            # Value or Pattern - if already set then it triggers off a new entry
+            current_value = eval("current_file_pattern." + key_variable)
+            if current_value is not None :
+                # Its already set - This could be a trigger for a new record
+                # In which case all the values with higher precedence need
+                # to be set
+                for precedence_key in self.pattern_keys :
+                    check_precedence = \
+                        self.pattern_keys[precedence_key]['precedence']
+                    if check_precedence is not None :
+                        check_value = eval("current_file_pattern.{0}" \
+                            .format(
+                                self.pattern_keys[precedence_key]['variable']))
+                        if check_precedence < key_precedence and \
+                            precedence_key != key and \
+                            check_value is None:
 
-            #   Check if the master is set and this is a slave
-            if current_file_pattern.master and key_precedence is not None :
+                            raise ParseError("Duplicate value for value {0}. " \
+                                "Already set to '{1}', new value '{2}'".format(
+                                key, current_value, value))
+
+                #   new record requested so fill in the defaults, validate
+                #   and then create a new entry
+                #   entry
                 self.check_file_pattern_complete(current_file_pattern)
                 self.file_pattern_list.append(current_file_pattern)
                 current_file_pattern = FilePattern()
-            else :
-                if key in current_file_pattern.var_list :
-                    current_value = eval("current_file_pattern." + key_variable)
-                    raise ParseError("Duplicate key '{0}', current value '{1}" \
-                        ", new value '{2}'".format(key, current_value, value))
 
             # set the variable - this also takes care of patterns
             self.set_file_pattern_variable(current_file_pattern, key, value)
@@ -374,12 +355,6 @@ Date:: as Pattern 1
 
         key_variable = self.pattern_keys[key]['variable']
         key_type = self.pattern_keys[key]['type']
-        key_precedence = self.pattern_keys[key]['precedence']
-
-        current_file_pattern.var_list.append(key)
-
-        if key_precedence == 'Master' :
-            current_file_pattern.master = True
 
         if key_type == 'value' :
             exec(                                     #pylint: disable-msg=W0122
@@ -401,7 +376,7 @@ Date:: as Pattern 1
         #
         current_file_pattern = None
 
-        dtpo_log('info', "Parsing pattern file -> '%s'", config_file)
+        Config.logger.info("Parsing pattern file -> '%s'", config_file)
         line_number = 0
         try :
             for line in open(config_file) :
@@ -410,36 +385,46 @@ Date:: as Pattern 1
                 key, value = parse_line(line, line_number)
 
                 # if we found something then process it
-                if (key or value) :
+                if (key) :
                     current_file_pattern = self.process_pattern_value(
                             current_file_pattern,
                             key,
                             value)
-
-            #   check that the defaults are there - do this first in case the
-            #   file is corrupt - that way we fail gracefully
+            #
+            #   Come out of the loop - before checking last record
+            #   check that the defaults are there
             for key in self.pattern_keys :
                 if self.pattern_keys[key]['type'] == 'default' and \
                     not self.pattern_keys[key]['optional'] and \
                     eval("self.{0} is None".format(
                         self.pattern_keys[key]['variable'])) :
-                    raise DTPOFileError(config_file, line_number,
+                    raise ConfigError(config_file, line_number,
                         "Missing default -> '{0}'".format(key))
 
             #   Validate that the last record is good & then add it to the list
             self.check_file_pattern_complete(current_file_pattern)
             self.file_pattern_list.append(current_file_pattern)
 
-
         except ParseError as parse_exception :
-            raise DTPOFileError(
-                config_file, line_number, parse_exception.message)
+            raise ConfigError(config_file, line_number, parse_exception.message)
 
         except IOError as io_exception :
             #	Failed to access the config file
-            raise DTPOFileError (config_file, 0,
+            raise ConfigError (config_file, 0,
                 "Error accessing config file -> '{0}'" \
                 .format(str(io_exception)))
 
-    def get_file_pattern_list(self) :                 #pylint: disable-msg=C0111
-        return self.file_pattern_list
+    #def get_success(self) :
+    #    return self.success
+    #
+    #def get_default_database(self) :
+    #    return self.default_database
+    #
+    #def get_default_group(self) :
+    #    return self.default_group
+    #
+    #def get_default_tag(self) :
+    #    return self.default_tag
+    #
+    #def get_file_pattern_list(self) :
+    #    return self.file_pattern_list

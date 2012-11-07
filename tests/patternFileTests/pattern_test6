@@ -1,0 +1,12 @@
+#
+#	Test 6 - Missing Default Group
+
+DefaultDatabase::Default Database
+DefaultTag::Default Tag
+#DefaultGroup::Default Group
+
+Database::Database 
+	Description::Description 1
+	Group::Group 1
+	Pattern1::Pattern 1 key->Pattern 1 value
+	Date::Date 1 key->Date value 1

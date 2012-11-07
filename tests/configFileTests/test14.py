@@ -7,7 +7,7 @@ from utilities import *
 #	Note that this is based on the contents of the config file configfile_test8
 #
 
-def checkMethod() :
+def check_method() :
 	
 	success = True
 	

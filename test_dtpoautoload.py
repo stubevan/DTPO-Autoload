@@ -1,4 +1,4 @@
-#!/usr/bin/python    #pylint: disable-msg=C0103
+#!/usr/bin/python                                     #pylint: disable-msg=C0103
 """
     Script to test underlying modeules of dtpo auto load
 """
@@ -10,15 +10,15 @@ import optparse
 
 from utilities import Config
 from  dtpoparsespec import DTPOParseSpec
-from dtpoexceptions import ParseError
+from dtpoexceptions import DTPOFileError
 
 TEST_DEBUG = False
 
-class ParseTest (object) :    #pylint: disable-msg=R0903
+class ParseTest (object) :                            #pylint: disable-msg=R0903
     """ Holds Test Details
     """
 
-    def __init__ (self, test_goal, config_file,    #pylint: disable-msg=R0913
+    def __init__ (self, test_goal, config_file,       #pylint: disable-msg=R0913
 				  line_number, message, check_function) :
         self.test_goal = test_goal
         self.config_file = config_file
@@ -26,7 +26,7 @@ class ParseTest (object) :    #pylint: disable-msg=R0903
         self.message = message
         self.check_function = check_function
 
-def build_test_list(config_test_directory,         #pylint: disable-msg=R0914
+def build_test_list(config_test_directory,            #pylint: disable-msg=R0914
 					config_test_file) :
     """
         Parse the config file to get the tests.  Format is seperated with "::"
@@ -34,7 +34,7 @@ def build_test_list(config_test_directory,         #pylint: disable-msg=R0914
             (0) is success::expected error message
 
         the loader expects a file with the same name as the config file ".py"
-        to contain a method called checkMethod
+        to contain a method called check_method
         this takes no parameters as config is global
     """
 
@@ -90,7 +90,7 @@ def build_test_list(config_test_directory,         #pylint: disable-msg=R0914
 
     return test_list
 
-def run_the_test(class_to_test, test_number, the_test) :
+def run_test(module_to_test, test_number, the_test) :
     """
         Run a test - involves creating a config and then checking that if an
         error the exception is correct
@@ -105,16 +105,16 @@ def run_the_test(class_to_test, test_number, the_test) :
 
     success = True
     try :
-        if class_to_test == "Config" :
+        if module_to_test == "Config" :
             Config(the_test.config_file)
-            success = the_test.check_function.checkMethod()
-        elif class_to_test == "DTPOParseSpec" :
+            success = the_test.check_function.check_method()
+        elif module_to_test == "DTPOParseSpec" :
             pattern_spec = DTPOParseSpec(the_test.config_file)
-            success = the_test.check_function.checkMethod(pattern_spec)
+            success = the_test.check_function.check_method(pattern_spec)
         else :
             #    Shouldn't be here
             print "TEST ERROR - Invalid class specified -> '{0}'" \
-                .format(class_to_test)
+                .format(module_to_test)
             success = False
         #
         #    If we were successful then check that the values are correct
@@ -125,35 +125,35 @@ def run_the_test(class_to_test, test_number, the_test) :
         if success and TEST_DEBUG :
             print "Test Passed"
 
-    except ParseError as parse_error :
-        if not (type(parse_error) is ParseError):
-            print "Unexpected exception -> " + str(parse_error)
+    except DTPOFileError as config_error :
+        if not (type(config_error) is DTPOFileError):
+            print "Unexpected exception -> " + str(config_error)
             success = False
         else :
             if TEST_DEBUG :
                 print "Caught Exception -> '{0}, line number -> {1}, message " \
                     "-> '{2}'".format(
-                        parse_error.file,
-                        parse_error.line_number,
-                        parse_error.message)
+                        config_error.file,
+                        config_error.line_number,
+                        config_error.message)
             #
             #    Check whether its correct
             #
-            if parse_error.message != the_test.message :
+            if config_error.message != the_test.message :
                 print "TEST FAILED Bad Exception - Error messages don't match"
                 print "Expected message ->" + the_test.message + "<-"
-                print "got              ->" + str(parse_error.message) + "<-"
+                print "got              ->" + str(config_error.message) + "<-"
                 success = False
-            elif parse_error.line_number != the_test.line_number  :
+            elif config_error.line_number != the_test.line_number  :
                 print "TEST FAILED Bad Exception.  Expected line Number " \
                     + str(the_test.line_number) + ", got -> " \
-                    + str(parse_error.line_number)
+                    + str(config_error.line_number)
                 success = False
 
     return success
 
 
-def test_class(class_to_test, config_test_directory, config_test_file,
+def module_test(class_to_test, config_test_directory, config_test_file,
                config_file="") :
     """
         Test function for config class
@@ -169,10 +169,14 @@ def test_class(class_to_test, config_test_directory, config_test_file,
         if config_file and config_file != "" :
             Config.config = Config(config_file)
 
+    except DTPOFileError as config_error:
+        print "Config Error in {0}, line {1}, {2}" \
+		    .format(config_file, config_error.line_number, config_error.message)
+        raise config_error
+
     except Exception as exception:
         print "build_test_list Failed -> Tests Abandoned -> " + str(exception)
         raise exception
-
 
     test_number = 1
     failures = 0
@@ -181,7 +185,7 @@ def test_class(class_to_test, config_test_directory, config_test_file,
         if TEST_DEBUG :
             print "Running test -> " + str(test_number)
 
-        if not run_the_test(class_to_test, test_number, test) :
+        if not run_test(class_to_test, test_number, test) :
             failures = failures + 1
 
         test_number = test_number + 1
@@ -197,21 +201,17 @@ def main() :
     """
     command_line_parser = optparse.OptionParser()
     command_line_parser.add_option(
-        "--TEST_DEBUG", action="store_true", dest="TEST_DEBUG")
-    command_line_parser.add_option(
         "--test_directory", action="store", dest="test_directory")
+    command_line_parser.add_option(
+        "--test_file", action="store", dest="test_file")
     command_line_parser.add_option(
         "--test_config", action="store_true", dest="test_config")
     command_line_parser.add_option(
-        "--config_test_file", action="store", dest="config_test_file")
-    command_line_parser.add_option(
         "--test_patterns", action="store_true", dest="test_patterns")
-    command_line_parser.add_option(
-        "--pattern_test_file", action="store", dest="pattern_test_file")
     command_line_parser.add_option(
         "--test_loader", action="store_true", dest="test_loader")
     command_line_parser.add_option(
-        "--loader_test_file", action="store", dest="loader_test_file")
+        "--test_pdf", action="store_true", dest="test_pdf")
     command_line_parser.add_option(
         "--config_file", action="store", dest="config_file")
 
@@ -220,9 +220,11 @@ def main() :
     command_line_parser.set_defaults(test_parser=False)
     command_line_parser.set_defaults(test_loader=False)
     command_line_parser.set_defaults(test_file_parse=False)
+    command_line_parser.set_defaults(test_pdf=False)
 
     opts, source_file_args = command_line_parser.parse_args()
 
+    global TEST_DEBUG                                 #pylint: disable-msg=W0603
     if (opts.TEST_DEBUG) :
         TEST_DEBUG = True
     #
@@ -234,9 +236,12 @@ def main() :
     #    Tests for the Config File
     #
     if (opts.test_config) :
-        test_class("Config", opts.test_directory, opts.config_test_file)
+        module_test("Config", opts.test_directory, opts.test_file)
     if (opts.test_patterns) :
-        test_class("DTPOParseSpec", opts.test_directory, opts.pattern_test_file,
+        module_test("DTPOParseSpec", opts.test_directory, opts.test_file,
+                   opts.config_file)
+    if (opts.test_pdf) :
+        module_test("ImportIntoDTPO", opts.test_directory, opts.test_file,
                    opts.config_file)
 
 if __name__ == '__main__':

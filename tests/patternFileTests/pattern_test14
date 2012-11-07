@@ -1,0 +1,21 @@
+#
+#	Test 14 - Good Pattern 2 entries
+
+DefaultGroup::Default Group
+DefaultTag::Default Tag
+DefaultDatabase::Default Database
+
+	Pattern1::Pattern 1 key
+	Date::Date 1 key->(2)Date 1 value
+	
+	Pattern1::Pattern 2 key->Pattern 2 value
+	Pattern2::Pattern2 key->(12)Pattern2 value
+	Date::Date 2 key->(-22)Date 2 value
+	
+Database::Database Reset
+Group::Group Reset
+	Description::New Description
+	Tag::New Tag
+	Pattern1::Pattern 3 key->(3)Pattern 3 value
+	Pattern2::Pattern2 2 key->(2)Pattern2 2 value
+	

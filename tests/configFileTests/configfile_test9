@@ -26,6 +26,13 @@ DEBUG=False#Comment at end of Line
 #
 	SOURCE_DIRECTORY=/Volumes/Encrypted Docs/Time For Action # Comment at end of line
 
+
+#
+#   Directory contain the documents to be processed
+#   This should also have a Folder Action on it
+#
+WORKING_DIRECTORY=/Volumes/App Data/Working Area
+
 #
 #	Base for the DTPO Databases
 #

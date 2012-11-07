@@ -33,6 +33,12 @@ SOURCE_DIRECTORY=/Users/stu/Development/scripts/dtpo_autoload/tests/configFileTe
 DEVONTHINK_DATABASES_DIRECTORY=/Volumes/Encrypted Docs/Devon Filing
 
 #
+#   Directory contain the documents to be processed
+#   This should also have a Folder Action on it
+#
+WORKING_DIRECTORY=/Volumes/App Data/Working Area
+
+#
 #	Directory for Documents which cause an Error and can't be loaded
 #	Commented out for the test
 ORPHAN_DOCUMENTS_DIRECTORY=/Volumes/Encrypted Docs/Time For Action/Orphan Documents

@@ -1,0 +1,13 @@
+#
+#	Test 12 - Good Pattern
+
+DefaultGroup::Default Group
+DefaultTag::Default Tag
+DefaultDatabase::Default Database
+
+Database::Database 1
+Group::Group 1
+	Pattern1::Pattern 1 key
+	Description::Description 1
+	Tag::Tag 1
+	Date::Date 1 key->(2)Date 1 value

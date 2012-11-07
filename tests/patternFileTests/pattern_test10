@@ -1,0 +1,11 @@
+#
+#	Test 10 - Pattern - No Pattern 1 specified
+
+DefaultGroup::Default Group
+DefaultTag::Default Tag
+DefaultDatabase::Default Database
+
+	Tag::Tag 1
+	Database::Database 1
+	Group::Group 1
+	Date::Date Key 1->Date Pattern 1

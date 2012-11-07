@@ -7,7 +7,7 @@ from utilities import *
 #	Note that this is based on the contents of the config file configfile_test8
 #
 
-def checkMethod() :
+def check_method() :
 	
 	success = True
 	
@@ -17,6 +17,7 @@ def checkMethod() :
 	orphanDocumentsDirectory = { 'value' : '/Volumes/Encrypted Docs/Time For Action/Orphan Documents', 'set' : False }
 	logDirectory = { 'value' : '/Volumes/App Data/Script Logs', 'set' : False }
 	patternFile = { 'value' : '/Users/stu/Development/scripts/dtpo_autoload/dtpo_autoload_patterns.conf', 'set' : False }
+	working_directory = { 'value' : '/Volumes/App Data/Working Area', 'set' : False }
 	
 	parameters = { 
 		'DEBUG' : debugSetting,
@@ -24,7 +25,8 @@ def checkMethod() :
 		'DEVONTHINK_DATABASES_DIRECTORY' : devonThinkDatabaseDirectory,
 		'ORPHAN_DOCUMENTS_DIRECTORY' : orphanDocumentsDirectory,
 		'LOG_DIRECTORY' : logDirectory,
-		'PATTERN_FILE' : patternFile
+		'PATTERN_FILE' : patternFile,
+		'WORKING_DIRECTORY' : working_directory
 	}
 	
 	#
