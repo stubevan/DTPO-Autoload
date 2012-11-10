@@ -225,7 +225,7 @@ Date:: as Pattern 1
         """
             read through the file and set the parameters
         """
-        dtpo_log('info', 'DTPOParseSpec. Source File -> %s', config_file)
+        dtpo_log('debug', 'DTPOParseSpec. Source File -> %s', config_file)
 
         self.default_database = None
         self.default_group = None
@@ -401,7 +401,7 @@ Date:: as Pattern 1
         #
         current_file_pattern = None
 
-        dtpo_log('info', "Parsing pattern file -> '%s'", config_file)
+        dtpo_log('debug', "Parsing pattern file -> '%s'", config_file)
         line_number = 0
         try :
             for line in open(config_file) :

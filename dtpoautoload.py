@@ -4,9 +4,10 @@
     to upload them into DevonThink
 """
 
+import os
 import optparse
 
-from utilities import Config, pop_up_alert, orphan_file, dtpo_log
+from utilities import Config, pop_up_alert, orphan_file, dtpo_log, basename
 from dtpoexceptions import ParseError
 from dtpoparsespec import DTPOParseSpec, DTPOFileError
 from importintodtpo import execute_import, get_import_parameters
@@ -44,7 +45,7 @@ def main() :
     #    Now iterate through the files
     #
     for source_file in source_file_args:
-        dtpo_log('info', "Started processing -> %s", source_file)
+        dtpo_log('debug', "Started processing -> %s", source_file)
 
         try :
             #
@@ -62,10 +63,10 @@ def main() :
             #    We failed ... Move the file to the Orphan directory
             #
             print parse_error.message
-            dtpo_log('error', "Import Failed - orphaning file")
+            dtpo_log('error', "Import failed for '%s' - orphaning file",
+                basename(source_file))
             orphan_file(source_file)
-            pop_up_alert("Failed to import file " + source_file + \
-                ".  File Orphaned")
+
 
 if __name__ == '__main__':
     main()

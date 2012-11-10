@@ -1,5 +1,6 @@
 #!/bin/sh
 
+cd ../../
 xx=`pwd`
 IFS=\
 

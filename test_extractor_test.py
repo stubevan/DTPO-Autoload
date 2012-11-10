@@ -98,4 +98,6 @@ if __name__ == '__main__':
     if TextExtractorTest.test_directory is None :
         raise ValueError ("FATAL - test_directory not specified")
 
+    print TextExtractorTest.test_directory
+
     unittest.main()

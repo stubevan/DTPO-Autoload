@@ -16,7 +16,7 @@ def check_method() :
 	devonThinkDatabaseDirectory = { 'value' : '/Volumes/Encrypted Docs/Devon Filing', 'set' : False }
 	orphanDocumentsDirectory = { 'value' : '/Volumes/Encrypted Docs/Time For Action/Orphan Documents', 'set' : False }
 	logDirectory = { 'value' : '/Volumes/App Data/Script Logs', 'set' : False }
-	patternFile = { 'value' : '/Users/stu/Development/scripts/dtpo_autoload/dtpo_autoload_patterns.conf', 'set' : False }
+	patternFile = { 'value' : '/Users/stu/Development/scripts/dtpo_autoload/tests/configFileTests/dtpo_autoload_patterns.conf', 'set' : False }
 	working_directory = { 'value' : '/Volumes/App Data/Working Area', 'set' : False }
 	
 	parameters = { 

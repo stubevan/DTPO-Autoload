@@ -43,7 +43,7 @@ class TextExtractor(object) :
             assert Config.logger
             assert Config.config
 
-        dtpo_log('info', 'TextExtractor -> %s', source_file)
+        dtpo_log('debug', 'TextExtractor -> %s', source_file)
 
         if source_directory is None :
             source_directory = Config.config.get_source_directory()

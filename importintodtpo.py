@@ -254,11 +254,11 @@ def execute_import(import_parameters) :
         import_parameters.database
     document_name = import_parameters.get_document_name()
 
-    dtpo_log('info', "execute_import source file -> %s", source_file)
-    dtpo_log('info', "execute_import database -> %s", database)
-    dtpo_log('info', "execute_import group -> %s", import_parameters.group)
-    dtpo_log('info', "execute_import tags -> %s", import_parameters.tags)
-    dtpo_log('info', "execute_import document name -> %s", document_name)
+    dtpo_log('debug', "execute_import source file -> %s", source_file)
+    dtpo_log('debug', "execute_import database -> %s", database)
+    dtpo_log('debug', "execute_import group -> %s", import_parameters.group)
+    dtpo_log('debug', "execute_import tags -> %s", import_parameters.tags)
+    dtpo_log('debug', "execute_import document name -> %s", document_name)
 
     try :
         try :
@@ -319,7 +319,7 @@ def get_import_parameters(source_file, pattern_spec) :
         Imports the specified file into DTPO using the spec given
     """
 
-    dtpo_log('info', "get_import_parameters source_file -> %s", source_file)
+    dtpo_log('debug', "get_import_parameters source_file -> %s", source_file)
 
     #
     #   parse the file and turn it into a list

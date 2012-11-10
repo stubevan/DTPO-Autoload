@@ -271,3 +271,11 @@ def set_up_logging(log_directory) :
         format = "%(levelname)-10s %(asctime)s %(message)s",
         level = logging.INFO)
     Config.logger = logging.getLogger("dtpo_autoload")
+
+def basename(source_file) :
+    """
+	Extract the basename of the file
+	"""
+    assert source_file is not None and source_file != ""
+
+    return os.path.basename(source_file)
