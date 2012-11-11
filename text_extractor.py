@@ -30,6 +30,7 @@ class TextExtractor(object) :
 
     def __init__(self,
                  source_file,
+                 test_parse = False,
                  source_directory = None,
                  working_directory = None,
                  testing = False) :
@@ -57,19 +58,19 @@ class TextExtractor(object) :
 
         self.file_type, self.mime_type = get_file_type(self.source_file)
         if str(self.file_type) == 'k.PDF_Document' :
-            self.parse_pdf()
+            self.parse_pdf(test_parse)
         else :
             error_message = 'TextExtractor - Invalid File Type for {0}' \
                 .format(self.source_file)
             dtpo_log('error', error_message)
             raise ValueError(error_message)
 
-    def parse_pdf(self) :
+    def parse_pdf(self, test_parse = False) :
         """
             Parse a PDF and return text contents as an array
         """
 
-        dtpo_log('info', "parsePDF sourceFile -> '%s'", self.source_file)
+        dtpo_log('debug', "parsePDF sourceFile -> '%s'", self.source_file)
 
         # input options
         pagenos = set()
@@ -78,8 +79,8 @@ class TextExtractor(object) :
         codec = 'utf-8'
         caching = True
         laparams = LAParams()
-        laparams.char_margin = 4.0
-        laparams.word_margin = 1.0
+        laparams.char_margin = 8.0
+        laparams.word_margin = 2.0
 
         rsrcmgr = PDFResourceManager(caching=caching)
 
@@ -122,8 +123,8 @@ class TextExtractor(object) :
             del self.file_array[-1]
 
         #   Remove the outfile
-        # TODO Have option to keep text file for determining patterns
-        os.remove(self.text_file)
+        if not test_parse :
+            os.remove(self.text_file)
 
     def get_file_contents_as_array(self) :
         """

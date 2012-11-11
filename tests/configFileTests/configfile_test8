@@ -41,3 +41,5 @@ DEVONTHINK_DATABASES_DIRECTORY=/Volumes/Encrypted Docs/Devon Filing
 #	Directory for Documents which cause an Error and can't be loaded
 #	Commented out for the test
 ORPHAN_DOCUMENTS_DIRECTORY=/Volumes/Encrypted Docs/Time For Action/Orphan Documents
+
+TRASH_DIRECTORY=/tmp

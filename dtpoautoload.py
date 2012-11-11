@@ -4,10 +4,11 @@
     to upload them into DevonThink
 """
 
-import os
 import optparse
+import os
 
-from utilities import Config, pop_up_alert, orphan_file, dtpo_log, basename
+from utilities import Config, dtpo_alert, orphan_file, dtpo_log, basename, \
+    trash_file
 from dtpoexceptions import ParseError
 from dtpoparsespec import DTPOParseSpec, DTPOFileError
 from importintodtpo import execute_import, get_import_parameters
@@ -35,37 +36,66 @@ def main() :
         Config(opts.config_file)
         pattern_spec = DTPOParseSpec(Config.config.get_pattern_file())
     except DTPOFileError as file_error:
-        print file_error.message
+        dtpo_alert(log_type = 'fatal', reason = file_error.message)
+        raise SystemExit("FATAL ERROR - Failed to parse config file")
     except ParseError as parse_error :
-        pop_up_alert("DTPO Initialsation failed.  Files not orphaned.  ->"\
-            " " + parse_error.message)
-        raise SystemExit("FATAL ERROR Config File not specified")
+        dtpo_alert('fatal', reason = parse_error.message)
+        raise SystemExit("FATAL ERROR - Failed to parse pattern file")
 
     #
     #    Now iterate through the files
     #
     for source_file in source_file_args:
-        dtpo_log('debug', "Started processing -> %s", source_file)
+        dtpo_log('info', "Started processing -> %s", source_file)
 
         try :
+
+            #  TODO - we're assuming PDF files here
+            #  Check that the file name actually ends in
+            #  pdf if not rename it as it will save trouble with DTPO later
+            suffix = source_file[-3:]
+            if suffix.lower() != 'pdf' :
+                dtpo_log('debug', "Adding pdf suffix on to '%s'",
+                         source_file)
+                source_dir = Config.config.get_source_directory() + '/'
+                os.rename(source_dir + source_file,
+                          source_dir + source_file + '.pdf')
+                source_file += '.pdf'
             #
             #    Convert the file to text if we can and then parse it
             #
-            import_details = get_import_parameters(source_file, pattern_spec)
+            import_details = get_import_parameters(source_file, pattern_spec,
+                                                   opts.test_parse)
             if opts.test_parse :
                 import_details.print_import_details(source_file)
             else :
                 execute_import(import_details)
+                trash_file(source_file, import_details.get_document_name())
+                dtpo_alert('info',
+                           file_name = import_details.get_document_name(),
+                           group_name = import_details.group)
         except DTPOFileError as file_error :
-            print file_error.message
+            #    We failed ... Leave the file be as there is a problem with it
+            dtpo_log('error', "Import failed for '%s' - file not touched\n%s",
+                basename(source_file), file_error.message)
+            dtpo_alert('fatal', reason = file_error.message,
+                       file_name = source_file)
+
         except ParseError as parse_error :
-            #
             #    We failed ... Move the file to the Orphan directory
-            #
-            print parse_error.message
-            dtpo_log('error', "Import failed for '%s' - orphaning file",
-                basename(source_file))
+            dtpo_log('error', "Import failed for '%s' - orphaning file\n%s",
+                basename(source_file), parse_error.message)
+            dtpo_alert('error', reason = parse_error.message,
+                       file_name = source_file)
             orphan_file(source_file)
+        except Exception as exception :
+            #   Something horrible has happend
+            dtpo_log('fatal', "System error for '%s'\n%s",
+                     basename(source_file), str(exception))
+            dtpo_alert('fatal', reason = str(exception),
+                       file_name = source_file)
+
+        dtpo_log('debug', 'Completed Successfully')
 
 
 if __name__ == '__main__':

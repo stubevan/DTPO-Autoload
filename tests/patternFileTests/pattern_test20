@@ -1,0 +1,11 @@
+#
+#	Test 12 - Good Pattern
+
+DefaultGroup::Default Group
+DefaultTag::Default Tag
+DefaultDatabase::Default Database
+
+    Description::Description 1
+	Group::Default Group
+	Pattern1::Pattern 1 key->!!Pattern 1 value
+	Date::Statement Date->(1)Statement Date ([1-9]+.*2[0-9][0-9][0-9])

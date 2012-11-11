@@ -18,7 +18,7 @@ DEBUG=False
 #
 #	Config File - contains the parsing instructions
 #
-PATTERN_FILE=/Users/stu/Development/scripts/dtpo_autoload/dtpo_autoload_patterns.conf
+PATTERN_FILE=/Users/stu/Development/scripts/dtpo_autoload/tests/configFileTests/dtpo_autoload_patterns.conf
 
 #
 #	Directory contain the documents to be processed
@@ -42,3 +42,4 @@ WORKING_DIRECTORY=/Volumes/App Data/Working Area
 #	Directory for Documents which cause an Error and can't be loaded
 #	Commented out for the test
 ORPHAN_DOCUMENTS_DIRECTORY=/Volumes/Encrypted Docs/Time For Action/Orphan Documents
+TRASH_DIRECTORY=/tmp

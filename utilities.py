@@ -5,9 +5,11 @@ Class which holds the base config class and utility functions
 
 import re
 import os
+
 from datetime import date
 import logging
-import subprocess
+
+import gntp.notifier
 
 from dtpoexceptions import DTPOFileError, ParseError
 
@@ -49,6 +51,7 @@ class Config (object) :                               #pylint: disable-msg=R0903
         # we reset every time
         Config.debug = None
         Config.logger = None
+        Config.growl = None
 
         #    Set up an array to make it easy to parse
         self.debug_setting = { 'value' : False, 'set' : True, 'type' : 'na' }
@@ -59,6 +62,7 @@ class Config (object) :                               #pylint: disable-msg=R0903
         self.log_dir = { 'value' : '', 'set' : False, 'type' : 'dir' }
         self.pattern_file = { 'value' : '', 'set' : False, 'type' : 'file' }
         self.working_directory = { 'value' : '', 'set' : False, 'type' : 'dir' }
+        self.trash_directory = { 'value' : '', 'set' : False, 'type' : 'dir' }
 
         self.parameters = {
             'DEBUG' : self.debug_setting,
@@ -67,7 +71,8 @@ class Config (object) :                               #pylint: disable-msg=R0903
             'ORPHAN_DOCUMENTS_DIRECTORY' : self.orphan_docs_dir,
             'LOG_DIRECTORY' : self.log_dir    ,
             'PATTERN_FILE' : self.pattern_file,
-            'WORKING_DIRECTORY' : self.working_directory
+            'WORKING_DIRECTORY' : self.working_directory,
+            'TRASH_DIRECTORY' : self.trash_directory
         }
         Config.config = self
 
@@ -142,7 +147,8 @@ class Config (object) :                               #pylint: disable-msg=R0903
                             'debug' : self.logger.debug,
                             'error' : self.logger.error,
                             'info' : self.logger.info,
-                            'fatal' : self.logger.fatal
+                            'warn' : self.logger.warn,
+                            'fatal' : self.logger.fatal,
                         }
 
                     #
@@ -222,60 +228,120 @@ class Config (object) :                               #pylint: disable-msg=R0903
         """
         return self.parameters['DEVONTHINK_DATABASES_DIRECTORY']['value']
 
-#
-#    Pop up an alert
-#
-def pop_up_alert(alert_message) :
-    """ Create a screen level popup using AppleScript
-    """
-    dtpo_log('debug', "popUpAlert message -> %s", alert_message)
-    message = '-e tell app "System Events" to display alert "' + \
-        alert_message + '"'
-    subprocess.call (["/usr/bin/osascript", message])
-#
-#    Move a file into the orphan directory
-#
+    def get_orphan_directory(self) :
+        """ Return ORPHAN_DOCUMENTS_DIRECTORY
+        """
+        return self.parameters['ORPHAN_DOCUMENTS_DIRECTORY']['value']
+
+    def get_trash_directory(self) :
+        """ Return TRASH_DIRECTORY
+        """
+        return self.parameters['TRASH_DIRECTORY']['value']
+
 def orphan_file(file_to_orphan) :
     """  Move specified file to the orphan directory
          Generally used when a file can't be renamed or loaded
     """
     dtpo_log('debug', "orphan_file file -> %s", file_to_orphan)
 
-    source = Config.config.parameters['source_dir']['value'] + '/' + \
-        file_to_orphan
+    source = Config.config.get_source_directory() + '/' + file_to_orphan
     destination = \
-        Config.config.parameters['ORPHAN_DOCUMENTS_DIRECTORY']['value'] + '/' +\
-        file_to_orphan
+        Config.config.get_orphan_directory() + '/' + file_to_orphan
+
+    os.rename(source, destination)
+
+def trash_file(file_to_trash, document_name) :
+    """  Move specified file to the secure trash directory
+         Generally used after a successful import
+    """
+    dtpo_log('debug', "trash_file file -> %s", file_to_trash)
+
+    source = Config.config.get_source_directory() + '/' + file_to_trash
+    destination = Config.config.get_trash_directory() + '/' + document_name
 
     os.rename(source, destination)
 
 def dtpo_log(log_type, message_text, *args) :
     """
-    Helper class to make testing easier - avoids having to instantiate a config
-	TODO : Generate Growl notifications at the appropriate point
+    Generate logging messages.  log_type is one of:
+    debug, info, error, fatal.
+    Note that this method will also work without Config being instatiated
+    which makes it test safe
     """
-    if Config.logger is not None :
+    if Config.logger is not None:
         if log_type not in Config.config.valid_logging_methods :
             raise ValueError("Invalid logging type '{0}'".format(log_type))
 
         Config.config.valid_logging_methods[log_type](message_text, *args)
+
+def dtpo_alert(log_type, reason = '', file_name = '', group_name = '') :
+    """
+    Generate growl alert messages.  log_type is one of:
+    debug, info, error, fatal.
+    Note that this method will also work without Config being instatiated
+    which makes it test safe
+    """
+    if Config.growl is not None:
+        if log_type not in Config.config.valid_logging_methods :
+            raise ValueError("Invalid logging type '{0}'".format(log_type))
+
+        if log_type != 'debug' :
+            file_name = basename(file_name)
+            if log_type == 'info' :
+                sticky = False
+                noteType = 'info'
+                title = 'DTPO load success'
+                description = '{0} to\n{1}'.format(file_name, group_name)
+            elif log_type == 'error' :
+                noteType = 'error'
+                title = 'DTPO load failure'
+                sticky = True
+                description = '{0}\n{1} orphaned'.format(reason, file_name)
+            elif log_type == 'warn' :
+                noteType = 'info'
+                sticky = True
+                title = 'DTPO load warning'
+                description = '{0} {1}'.format(reason, file_name)
+            else :
+                noteType = 'error'
+                title = 'DTPO system error'
+                sticky = True
+                description = '{0}\nfile {1} not processed'.format(
+                    reason, file_name)
+
+            Config.growl.notify(
+                noteType = noteType,
+                title = title,
+                description = description,
+                icon='http://www.devontechnologies.com/typo3temp/pics/' \
+                     'e9b5034330.png',
+                sticky = sticky,
+                priority = 1)
 
 def set_up_logging(log_directory) :
     """
         Initialise logging
     """
     logging.basicConfig (
-        filename = log_directory + "/" + \
-            date.today().strftime("%y-%m-%d") + \
+        filename = log_directory + '/' + \
+            date.today().strftime('%y-%m-%d') + \
             ".dtpo_autoload.log",
         format = "%(levelname)-10s %(asctime)s %(message)s",
         level = logging.INFO)
-    Config.logger = logging.getLogger("dtpo_autoload")
+    Config.logger = logging.getLogger('dtpo_autoload')
+
+    # Now set up the Growl notification
+    Config.growl = gntp.notifier.GrowlNotifier(
+        applicationName = 'DTPO Autoload',
+        notifications = ['info','error'],
+        defaultNotifications = ['info'])
+    Config.growl.register()
 
 def basename(source_file) :
     """
 	Extract the basename of the file
 	"""
-    assert source_file is not None and source_file != ""
+    if source_file is not None and source_file != '' :
+        return os.path.basename(source_file)
 
-    return os.path.basename(source_file)
+    return ''

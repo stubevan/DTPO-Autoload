@@ -18,6 +18,7 @@ def check_method() :
 	logDirectory = { 'value' : '/Volumes/App Data/Script Logs', 'set' : False }
 	patternFile = { 'value' : '/Users/stu/Development/scripts/dtpo_autoload/tests/configFileTests/dtpo_autoload_patterns.conf', 'set' : False }
 	working_directory = { 'value' : '/Volumes/App Data/Working Area', 'set' : False }
+	trash_directory = { 'value' : '/tmp', 'set' : False }
 	
 	parameters = { 
 		'DEBUG' : debugSetting,
@@ -26,7 +27,8 @@ def check_method() :
 		'ORPHAN_DOCUMENTS_DIRECTORY' : orphanDocumentsDirectory,
 		'LOG_DIRECTORY' : logDirectory,
 		'PATTERN_FILE' : patternFile,
-		'WORKING_DIRECTORY' : working_directory
+		'WORKING_DIRECTORY' : working_directory,
+		'TRASH_DIRECTORY' : trash_directory,
 	}
 	
 	#

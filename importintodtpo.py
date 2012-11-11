@@ -6,12 +6,13 @@
 
 import re
 from dateutil import parser
+from time import sleep
 
-from appscript import app, k
+from appscript import app
 
 from dtpoexceptions import ParseError
-from dtpoparsespec import DTPOParseSpec
-from utilities import dtpo_log, Config
+#from dtpoparsespec import DTPOParseSpec
+from utilities import dtpo_log, Config, dtpo_alert, basename
 from text_extractor import TextExtractor
 
 class DTPOImportParameters (object) :
@@ -58,8 +59,7 @@ class DTPOImportParameters (object) :
     def get_document_name(self) :
         """
             creates the final name of the file by constructing from
-            the component parts
-            If nothing was found then assign a default
+            the component parts.
         """
         if self.string1 is None :
             self.string1 = 'No Match Found'
@@ -70,6 +70,7 @@ class DTPOImportParameters (object) :
             #   We have a date - try and convert it into something meaningful
             try :
                 dt = parser.parse(self.date_string)
+                date_string = dt.strftime('%Y-%m-%d')
             except ValueError as date_error :
                 message = "Failed to convert '{0}' to date -> {1}".format(
                     self.date_string, str(date_error))
@@ -77,8 +78,6 @@ class DTPOImportParameters (object) :
             except Exception as unknown_exception :
                 message = "unknown exception while parsing date {0} -> {1}" \
                         .format(self.date_string, str(unknown_exception))
-
-            date_string = dt.strftime('%Y-%m-%d')
 
             document_name = date_string + " " + self.string1
         else :
@@ -131,6 +130,9 @@ def parse_source_file(text_extractor, pattern_spec) :
             file_array,
             line_number)
         if found_string1 :
+            # See if it's a special
+            if found_string1 == 'SOURCE_FILE' :
+                found_string1 = basename(text_extractor.source_file)
             break
 
     if found_string1 :
@@ -254,15 +256,16 @@ def execute_import(import_parameters) :
         import_parameters.database
     document_name = import_parameters.get_document_name()
 
-    dtpo_log('debug', "execute_import source file -> %s", source_file)
-    dtpo_log('debug', "execute_import database -> %s", database)
-    dtpo_log('debug', "execute_import group -> %s", import_parameters.group)
-    dtpo_log('debug', "execute_import tags -> %s", import_parameters.tags)
-    dtpo_log('debug', "execute_import document name -> %s", document_name)
+    dtpo_log('info', "execute_import source file -> %s", source_file)
+    dtpo_log('info', "execute_import database -> %s", database)
+    dtpo_log('info', "execute_import group -> %s", import_parameters.group)
+    dtpo_log('info', "execute_import tags -> %s", import_parameters.tags)
+    dtpo_log('info', "execute_import document name -> %s", document_name)
 
     try :
         try :
             dtpo_db = app(u'DEVONthink Pro').open_database(database)
+            sleep(2)
             dtpo_db_id = dtpo_db.id()
         except AttributeError as attribute_error :
             message = "Failed to open database {0} -> {1}".format(
@@ -295,9 +298,15 @@ def execute_import(import_parameters) :
         try :
             app(u'DEVONthink Pro').databases.ID(
                 dtpo_db_id).contents.ID(docid).unread.set(True)
-            #duplicate = app(u'DEVONthink Pro').databases.ID(
-            #    dtpo_db_id).contents.ID(docid).number_of_duplicates.get()
-            # TODO Generate Growl notification on duplicate
+            app(u'DEVONthink Pro').databases.ID(
+                dtpo_db_id).contents.ID(docid).tags.set(import_parameters.tags)
+            app(u'DEVONthink Pro').databases.ID(
+                dtpo_db_id).contents.ID(docid).URL.set('')
+            duplicate = app(u'DEVONthink Pro').databases.ID(
+                dtpo_db_id).contents.ID(docid).number_of_duplicates.get()
+            if int(duplicate) > 0 :
+                dtpo_alert('warn', reason = '{0} duplicates of '\
+                    .format(duplicate), file_name = document_name)
         except AttributeError as attribute_error :
             message = "Failed set attributes {0} -> {1}".format(
                 import_parameters.get_document_name(), str(attribute_error))
@@ -311,10 +320,9 @@ def execute_import(import_parameters) :
             ex_type, str(exception))
         raise Exception(message)
 
-    # TODO Need to move successfully loaded file to Trash
     return True
 
-def get_import_parameters(source_file, pattern_spec) :
+def get_import_parameters(source_file, pattern_spec, test_parse) :
     """
         Imports the specified file into DTPO using the spec given
     """
@@ -324,7 +332,7 @@ def get_import_parameters(source_file, pattern_spec) :
     #
     #   parse the file and turn it into a list
     #
-    file_parser = TextExtractor(source_file)
+    file_parser = TextExtractor(source_file, test_parse = test_parse)
 
     #   Parse the file and then do the import
     dtpo_import_parameters = parse_source_file(file_parser, pattern_spec)

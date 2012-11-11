@@ -52,7 +52,7 @@ class SearchDetails(object) :                         #pylint: disable-msg=R0903
             #   if neither are found then the value is the search string
             #   if search1 is set then we ignore search2
             search1 = re.search(
-                '^([^#]*)->\((.*)\)([^#]*)',           #pylint:disable-msg=W1401
+                '^([^#]*)->\(([\-+0-9]+)\)([^#]*)',    #pylint:disable-msg=W1401
                 value.lstrip())
             search2 = re.search('^([^#]*)->([^#]*)', value.lstrip())
 
@@ -63,6 +63,11 @@ class SearchDetails(object) :                         #pylint: disable-msg=R0903
                 self.key_pattern = search2.group(1)
                 self.offset_line = 0
                 self.value_pattern = search2.group(2)
+                #   Just check for the edge case where a non numeric offset
+                #   has been specced
+                if (self.value_pattern[0] == '(') :
+                    raise ParseError("Bad offset spec '{0}' - must be numeric"\
+                                     .format(self.value_pattern))
             else :
                 self.key_pattern = search1.group(1)
                 try :
