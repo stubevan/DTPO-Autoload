@@ -6,7 +6,6 @@
 
 import re
 from dateutil import parser
-from time import sleep
 
 from appscript import app
 
@@ -264,9 +263,17 @@ def execute_import(import_parameters) :
 
     try :
         try :
-            dtpo_db = app(u'DEVONthink Pro').open_database(database)
-            sleep(2)
-            dtpo_db_id = dtpo_db.id()
+            #   First see if the relevant database is open already
+            dtpo_db_id = None
+            dt = app(u'DEVONthink Pro')
+            for dtpo_db in dt.databases.get() :
+                if dtpo_db.path() == database :
+                    dtpo_db_id = dtpo_db.id()
+                    break
+            if dtpo_db_id is None :
+                dtpo_db = app(u'DEVONthink Pro').open_database(database)
+                dtpo_db_id = dtpo_db.id()
+
         except AttributeError as attribute_error :
             message = "Failed to open database {0} -> {1}".format(
                 import_parameters.database, str(attribute_error))
